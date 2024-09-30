@@ -1,0 +1,520 @@
+---
+title: "308_mid_Q1"
+author: "Jiahang Wang"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(irlba)
+library(ggplot2)
+library(jsonlite)
+library(dplyr)
+library(jsonlite)
+```
+
+# Part 1
+## load co_occur.csv
+```{r}
+data <- read.csv("./src/co_occur.csv", header = FALSE)
+head(data)
+```
+
+# Part 2
+## normalize
+```{r}
+# Normalize
+co_occur_scale <- log(1 + data)
+# View 
+head(co_occur_scale)
+```
+
+## computing the SVD (top100)
+```{r}
+# Compute the top 100 singular values and vectors
+svd_100 <- irlba(as.matrix(co_occur_scale), nv = 100)
+
+# svd_100$u contains the first 100 left singular vectors
+# svd_100$d contains the first 100 singular values
+# svd_100$v contains the first 100 right singular vectors
+
+# construct the rank-100 approximation
+co_occur_scale_approx_100 <- svd_100$u %*% diag(svd_100$d) %*% t(svd_100$v)
+```
+
+
+```{r}
+# view
+co_occur_scale_approx_100_df <- as.data.frame(co_occur_scale_approx_100)
+head(co_occur_scale_approx_100_df)
+```
+
+## save top100 singular values and vectors
+```{r}
+if (!dir.exists("./data")) {
+  dir.create("./data")
+}
+
+# Assuming svd_100 is your SVD result
+write.csv(svd_100$u, "./data/l_singular_matrix.csv", row.names = FALSE)
+write.csv(svd_100$d, "./data/singular_values.csv", row.names = FALSE)
+write.csv(svd_100$v, "./data/r_singular_matrix.csv", row.names = FALSE)
+```
+
+
+## Load top100 singular values and vectors
+```{r}
+# Read the left singular matrix from the CSV file
+l_singular_matrix <- read.csv("./data/l_singular_matrix.csv", row.names = NULL)
+
+# Read the singular values from the CSV file
+singular_values <- read.csv("./data/singular_values.csv", row.names = NULL)
+singular_values <- as.vector(singular_values[,1])
+
+# Read the right singular matrix from the CSV file
+r_singular_matrix <- read.csv("./data/r_singular_matrix.csv", row.names = NULL)
+```
+
+
+## load dictionary.txt
+```{r}
+dictionary <- read.table("./src/dictionary.txt", header = FALSE)
+head(dictionary)
+```
+## Plot the Top 100 Singular Values
+```{r}
+plot1 <- ggplot(data.frame(singular_values = singular_values), aes(x = seq_along(singular_values), y = singular_values)) +
+  geom_line() +  
+  geom_point(size = 1) +  
+  labs(title = "Top 100 Singular Values", x = "Index", y = "Singular Value")
+
+print(plot1)
+ggsave("./plots/plot1.png", plot = plot1, width = 5, height = 4, units = "in")
+```
+
+```{r}
+singular_values
+```
+Given the drastic drop from the first singular value (14299.7431) to the 100th (228.9035), it suggests that there's a significant amount of information captured by the first few singular values. It does seem to suggest that the matrix can be well approximated by a matrix of low rank. Capturing a substantial portion of the variance with just the top 100 singular values. Thus matrix $M$ is approximately low rank matrix. However, the presence of relatively large singular values even at the 100th position indicates that the matrix might not be strictly "low-rank".
+
+# Part 3
+```{r}
+# Initialize
+results <- list()
+
+# Loop through each of the 100 vectors
+for (i in 1:100) {
+  vector_values <- l_singular_matrix[,i] # Extract the i-th vector
+  
+  # Get indices of the top 10 largest positive values
+  top_positive_indices <- order(vector_values, decreasing = TRUE)[1:10]
+  # Get indices of the top 10 smallest (largest negative) values
+  top_negative_indices <- order(vector_values)[1:10]
+  
+  # Extract corresponding words
+  top_positive_words <- dictionary$V1[top_positive_indices]
+  top_negative_words <- dictionary$V1[top_negative_indices]
+  
+  # Append to results list
+  results[[i]] <- list(
+    vector = i,
+    positive_10 = top_positive_words,
+    negative_10 = top_negative_words
+  )
+}
+
+# Convert the results list to JSON
+json_data <- toJSON(results, pretty = TRUE)
+
+# Write the JSON to a file
+write(json_data, file = "./data/vector_word_top100.json")
+```
+
+
+**Vector 3:** 
+- positive_10: ["specific", "any", "data", "provide", "these", "certain", "different", "systems", "its", "use"]
+- negative_10: ["born", "john", "james", "david", "robert", "william", "jr", "george", "thomas", "michael"]
+- This vector contrasts technical or specific vocabulary like "specific," "data," and "systems" with common English names such as "John" and "James." It captures the difference between technical or abstract language and personal, human aspects.
+
+**Vector 4:** 
+- positive_10: ["you", "album", "love", "me", "my", "song", "episode", "your", "vocals", "baby"],
+- negative_10: ["district", "county", "council", "university", "national", "regional", "government", "department", "northern", "municipal"]
+- It highlights a division between personal, emotional expressions found in music and entertainment ("album," "love," "song") and formal, institutional terms ("district," "county," "university"). This vector separates personal expression from formal or organizational entities.
+
+**Vector 18:** 
+- positive_10: ["species", "birds", "medical", "reports", "officers", "animals", "list", "lists", "reported", "killed"]
+- negative_10: ["style", "towards", "revival", "progressive", "building", "economic", "market", "liberal", "construction", "conservative"]
+- This vector differentiates between natural or biological terms ("species," "birds," "animals") and human-made concepts or structures ("style," "economic," "market"). It captures the contrast between the natural world and human societal constructs.
+
+**Vector 28:** 
+- positive_10: ["american", "australian", "german", "canadian", "italian", "russian", "french", "british", "swedish", "polish"]
+- negative_10: ["similar", "greater", "multiple", "various", "different", "these", "certain", "airport", "footballer", "embassy"]
+- It contrasts nationalities and cultures ("american," "australian," "german") with terms indicating diversity or difference ("similar," "various," "different"). This vector likely captures the semantic field of nationality and cultural identity against the concept of diversity.
+
+**Vector 59:** 
+- positive_10: ["man", "girl", "woman", "player", "him", "out", "love", "began", "started", "begin"]
+- negative_10: ["county", "international", "district", "british", "university", "college", "school", "area", "national", "council"]
+- The contrast between personal and relational terms ("man," "woman," "love") and formal, institutional locations or entities ("county," "university," "national") suggests this vector captures the distinction between personal relationships and social or institutional contexts.
+
+The high-dimensional and sparse nature of word co-occurrence matrices often captures complex and subtle patterns that do not always align with human intuition or semantic clarity. These vectors might represent combinations of features that are statistically significant but semantically ambiguous or abstract. Additionally, language itself is multifaceted, incorporating not just semantic meaning but also syntactic structures, idiomatic expressions, and cultural references that may not cluster neatly. The algorithmic process of singular value decomposition (SVD) aims to reduce dimensionality and capture variance, which does not guarantee that the resulting dimensions will always correspond to clear, human-understandable concepts.
+
+
+# Part 4
+
+## a
+```{r}
+# Normalize
+V_normalized <- t(apply(as.matrix(l_singular_matrix), 1, function(row) row / sqrt(sum(row^2))))
+
+# Find the row indices for "woman" and "man"
+index_woman <- which(dictionary$V1 == "woman")
+index_man <- which(dictionary$V1 == "man")
+
+# Extract the embeddings for "woman" and "man"
+V1 <- V_normalized[index_woman, ]
+V2 <- V_normalized[index_man, ]
+
+# Compute V_hat
+V_hat <- V1 - V2
+
+# Specify the words to project
+words <- c("boy", "girl", "brother", "sister", "king", "queen", "he", "she", "john", "mary", "wall", "tree")
+projections <- numeric(length(words))
+
+# Project the embeddings of specified words onto V_hat
+for (i in seq_along(words)) {
+  index_word <- which(dictionary$V1 == words[i])
+  V_word <- V_normalized[index_word, ]
+  # Projection of V_word onto V_hat
+  projection <- sum(V_word * V_hat) / sqrt(sum(V_hat^2))
+  projections[i] <- projection
+}
+
+# plotting
+tmp <- data.frame(words = words, projections = projections)
+plot2 <- ggplot(tmp, aes(x = factor(words), y = projections, label = words)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5, hjust = 1, size = 3) +
+  labs(title = "Word Embeddings Projection onto V", x = "Words", y = "Projection on V") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(plot2)
+ggsave("./plots/plot2.png", plot = plot2, width = 5, height = 4, units = "in")
+```
+```{r}
+V_hat
+```
+
+
+- Words traditionally associated with female gender, like "girl", "queen", "she", "sister", and "mary", are projected to one side of the plot. Words traditionally associated with the male gender, like "boy", "king", "he", "brother", and "john", are on the opposite side. This indicates that the vector $V$ may indeed be capturing gender-related semantic information.
+
+- The words "tree" and "wall" are projected near the zero point, suggesting that these words are gender-neutral in this embedding space, as we would expect.
+
+## b
+```{r}
+# List of new words to project
+new_words <- c("math", "matrix", "history", "nurse", "doctor", "pilot", "teacher", "engineer", "science", "arts", "literature", "bob", "alice")
+
+# Project the embeddings of new words onto V_hat
+projections <- sapply(new_words, function(word) {
+  index_word <- which(dictionary$V1 == word)
+  V_word <- V_normalized[index_word, ]
+  # Projection of V_word onto V_hat
+  sum(V_word * V_hat) / sqrt(sum(V_hat^2))
+})
+
+
+tmp <- data.frame(words = new_words, projections = projections)
+
+plot3 <- ggplot(tmp, aes(x = factor(words), y = projections)) +
+  geom_point(size = 3) +  
+  geom_text(vjust = -0.5, hjust = 1, size = 3, aes(label = words)) +  
+  labs(title = "Projections of Word Embeddings onto V", x = "Words", y = "Projection on V") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(plot3)
+ggsave("./plots/plot3.png", plot = plot3, width = 5, height = 4, units = "in")
+```
+
+1. **Observations**:
+   - Words traditionally associated with professions, such as "nurse" and "teacher", show positive projections onto $V$, which might suggest a female connotation within the embedding space.
+   - Similarly, "engineer", "science", "math", and "matrix" have negative projections, potentially indicating a male connotation.
+   - Names typically associated with females ("alice") and males ("bob") show opposite projections, with "alice" being positive and "bob" negative, reinforcing the gender association in their embeddings.
+   - "Arts" and "literature" also show positive projections, possibly reflecting a cultural stereotype of these fields being more female-oriented.
+
+2. **Why Be the Case**:
+   - These projections are likely reflecting societal biases and stereotypes that exist in the data the model was trained on. Language use in historical texts, media, and on the internet often mirrors societal stereotypes, which are then learned by the word embedding model.
+
+3. **Potential Problems**:
+   - If an AI system like LinkedIn’s job candidate search algorithm were to use these embeddings without correction for biases, it might reinforce gender stereotypes in job recommendations.
+   - Candidates mentioning "nurse" or "teacher" might be disproportionately recommended for positions traditionally associated with women, while those with "engineer" or "science" might be funneled towards roles stereotypically held by men.
+   - Such bias could perpetuate gender imbalances in certain professions and could inadvertently discriminate against candidates based on gender stereotypes, potentially overlooking qualified individuals for certain roles.
+
+
+
+## c
+We can do Gender-Neutral Debiasing using the similar approach as discussed in the paper "Man is to Computer Programmer as Woman is to
+Homemaker? Debiasing Word Embeddings"
+
+1. **Identify Gender Direction**:
+   - Compute a "gender direction" by finding the difference between the mean embeddings of a set of gender-pair words (e.g., "he" - "she", "man" - "woman", etc.).
+   - This direction essentially captures the gender bias present in the embeddings.
+
+2. **Neutralize**:
+   - For every word that is not inherently gendered, subtract its projection on the gender direction.
+   - This makes gender-neutral words equidistant from gender-pair words, removing the gender bias from their embeddings.
+
+3. **Equalize Pairs**:
+   - For pairs of words that should be gender-neutral (like "nurse" - "doctor", "teacher" - "engineer"), ensure that they are equidistant to the gender direction after neutralization.
+   - This step further ensures that the gender-neutral words are treated similarly in the embedding space.
+
+4. **Re-embedding**:
+   - After the neutralize and equalize steps, re-embed the words in the embedding space. Possibly involves reducing the dimensionality of the space to ensure that the debiased words maintain their distances from each other while not reintroducing bias.
+   
+   
+# Part 5
+
+## a
+```{r}
+# index
+montreal_index <- which(dictionary$V1 == "montreal")
+# compute similarities
+similarities <- V_normalized %*% V_normalized[montreal_index, ]
+
+similarity_scores <- sort(similarities[,1], decreasing = TRUE)
+most_similar_indices <- order(similarities[,1], decreasing = TRUE)
+
+most_similar_words <- dictionary$V1[most_similar_indices]
+most_similar_words <- most_similar_words[most_similar_words != "montreal"]
+top_similar_words <- head(most_similar_words, 5)
+
+# Output the top5 most similar words
+top_similar_words
+```
+the most similar words to “montreal” is "vancouver"
+
+## b
+
+### load analogy_task.txt
+```{r}
+analogy_task <- read.table("./src/analogy_task.txt", header = FALSE)
+head(analogy_task)
+```
+
+### Run the task
+```{r}
+# Function to compute cosine similarity
+cosine_similarity <- function(x, y) {
+  sum(x * y)
+}
+
+# Function to perform the analogy task
+perform_analogy_task <- function(V_normalized, dictionary, analogy_task) {
+  results <- list()
+  top_1_accuracy <- 0
+  top_5_accuracy <- 0
+  
+  for (i in 1:nrow(analogy_task)) {
+    v1 <- analogy_task[i, 1]
+    v2 <- analogy_task[i, 2]
+    v3 <- analogy_task[i, 3]
+    correct_answer <- analogy_task[i, 4]
+    
+    # Get the indices for v1, v2, v3, and the correct answer
+    v1_index <- which(dictionary$V1 == v1)
+    v2_index <- which(dictionary$V1 == v2)
+    v3_index <- which(dictionary$V1 == v3)
+    correct_index <- which(dictionary$V1 == correct_answer)
+    
+    V1 <- V_normalized[v1_index, ]
+    V2 <- V_normalized[v2_index, ]
+    V3 <- V_normalized[v3_index, ]
+    
+    # Compute the target vector for comparison
+    target_vector <- V2 - V1 + V3
+    
+    # Exclude v1, v2, v3 from the similarity computation
+    excluded_indices <- c(v1_index, v2_index, v3_index)
+    
+    # Compute similarities
+    similarities <- apply(V_normalized, 1, function(v) cosine_similarity(v, target_vector))
+    similarities[excluded_indices] <- -Inf  # Set similarities to -Inf for excluded words
+    
+    # Sort similarities and get the top 5 indices
+    sorted_indices <- order(similarities, decreasing = TRUE)
+    top_5_indices <- sorted_indices[1:5]
+    
+    # Check if the top predictions match the correct answer
+    is_correct_top_1 <- top_5_indices[1] == correct_index
+    is_correct_top_5 <- correct_index %in% top_5_indices
+    
+    # Update the result and accuracies
+    result <- ifelse(is_correct_top_1, "correct", "wrong")
+    top_1_accuracy <- top_1_accuracy + as.integer(is_correct_top_1)
+    top_5_accuracy <- top_5_accuracy + as.integer(is_correct_top_5)
+    
+    # Store the result
+    results[[i]] <- list(
+      task = i,
+      result = result,
+      top_5_prediction = dictionary$V1[top_5_indices],
+      correct_answer = correct_answer
+    )
+  }
+  
+  # Calculate final accuracies
+  final_top_1_accuracy <- top_1_accuracy / nrow(analogy_task)
+  final_top_5_accuracy <- top_5_accuracy / nrow(analogy_task)
+  
+  # Save the results to JSON
+  write_json(results, "./data/task_result.json", pretty = TRUE)
+  
+  # Return the accuracies
+  list(top_1_accuracy = final_top_1_accuracy, top_5_accuracy = final_top_5_accuracy)
+}
+
+# Execute the function (Replace with actual dataframes)
+accuracies <- perform_analogy_task(V_normalized, dictionary, analogy_task)
+print(accuracies)
+```
+
+1. **Task 4: "Morocco is to ?" with the correct answer being "Egypt"** - This example suggests the model's difficulty in accurately capturing geographical proximity and relatedness between countries in North Africa. Despite the cultural and historical connections that might lead to Egypt being a strong candidate, the model failed to include Egypt in its top-5 predictions, indicating a potential gap in its representation of regional knowledge.
+
+2. **Task 35: "Britain is to England as ?" with the correct answer being "England"** - This task required understanding the nuanced relationship between geopolitical entities, specifically recognizing that England is a part of Britain. The incorrect predictions highlight the model's challenge in accurately representing hierarchical and part-whole relationships within geopolitical structures.
+
+3. **Task 243: "Romania is to ?" with the correct answer being "Serbia"** - This task likely aimed to assess the model's grasp of geographical or cultural adjacency between Eastern European countries. The failure to predict Serbia within the top-5 underscores a limitation in the model's ability to infer connections based on regional proximity or shared cultural-geographical contexts.
+
+These examples underscore the challenges in areas requiring deep understanding of geographical relations, nuanced recognition of national or regional identities, and the ability to infer relationships based on complex or less explicit contextual cues.
+
+## c
+```{r}
+# Compute the top 100 singular values and vectors
+svd_100 <- irlba(as.matrix(co_occur_scale), nv = 300)
+
+# svd_100$u contains the first 100 left singular vectors
+# svd_100$d contains the first 100 singular values
+# svd_100$v contains the first 100 right singular vectors
+```
+
+
+```{r}
+# # Calculate the reference magnitude
+# reference_magnitude <- mean(svd_100$d[4:6])
+# 
+# # Calculate scaling factors for the first three singular values
+# scaling_factors <- reference_magnitude / svd_100$d[1:3]
+# 
+# # Scale down the first three singular vectors in U
+# for (i in 1:3) {
+#     svd_100$u[, i] <- svd_100$u[, i] * scaling_factors[i]
+# }
+```
+
+
+```{r}
+if (!dir.exists("./bonus")) {
+  dir.create("./bonus")
+}
+
+# Assuming svd_100 is your SVD result
+write.csv(svd_100$u, "./bonus/l_singular_matrix.csv", row.names = FALSE)
+write.csv(svd_100$d, "./bonus/singular_values.csv", row.names = FALSE)
+write.csv(svd_100$v, "./bonus/r_singular_matrix.csv", row.names = FALSE)
+```
+
+```{r}
+# Read the left singular matrix from the CSV file
+l_singular_matrix <- read.csv("./bonus/l_singular_matrix.csv", row.names = NULL)
+
+# Read the singular values from the CSV file
+singular_values <- read.csv("./bonus/singular_values.csv", row.names = NULL)
+singular_values <- as.vector(singular_values[,1])
+
+# Read the right singular matrix from the CSV file
+r_singular_matrix <- read.csv("./bonus/r_singular_matrix.csv", row.names = NULL)
+```
+
+
+```{r}
+# Normalize
+V_normalized <- t(apply(as.matrix(l_singular_matrix), 1, function(row) row / sqrt(sum(row^2))))
+```
+
+
+```{r}
+# Function to compute cosine similarity
+cosine_similarity <- function(x, y) {
+  sum(x * y)
+}
+
+# Function to perform the analogy task
+perform_analogy_task <- function(V_normalized, dictionary, analogy_task) {
+  results <- list()
+  top_1_accuracy <- 0
+  top_5_accuracy <- 0
+  
+  for (i in 1:nrow(analogy_task)) {
+    v1 <- analogy_task[i, 1]
+    v2 <- analogy_task[i, 2]
+    v3 <- analogy_task[i, 3]
+    correct_answer <- analogy_task[i, 4]
+    
+    # Get the indices for v1, v2, v3, and the correct answer
+    v1_index <- which(dictionary$V1 == v1)
+    v2_index <- which(dictionary$V1 == v2)
+    v3_index <- which(dictionary$V1 == v3)
+    correct_index <- which(dictionary$V1 == correct_answer)
+    
+    V1 <- V_normalized[v1_index, ]
+    V2 <- V_normalized[v2_index, ]
+    V3 <- V_normalized[v3_index, ]
+    
+    # Compute the target vector for comparison
+    target_vector <- V2 - V1 + V3
+    
+    # Exclude v1, v2, v3 from the similarity computation
+    excluded_indices <- c(v1_index, v2_index, v3_index)
+    
+    # Compute similarities
+    similarities <- apply(V_normalized, 1, function(v) cosine_similarity(v, target_vector))
+    similarities[excluded_indices] <- -Inf  # Set similarities to -Inf for excluded words
+    
+    # Sort similarities and get the top 5 indices
+    sorted_indices <- order(similarities, decreasing = TRUE)
+    top_5_indices <- sorted_indices[1:5]
+    
+    # Check if the top predictions match the correct answer
+    is_correct_top_1 <- top_5_indices[1] == correct_index
+    is_correct_top_5 <- correct_index %in% top_5_indices
+    
+    # Update the result and accuracies
+    result <- ifelse(is_correct_top_1, "correct", "wrong")
+    top_1_accuracy <- top_1_accuracy + as.integer(is_correct_top_1)
+    top_5_accuracy <- top_5_accuracy + as.integer(is_correct_top_5)
+    
+    # Store the result
+    results[[i]] <- list(
+      task = i,
+      result = result,
+      top_5_prediction = dictionary$V1[top_5_indices],
+      correct_answer = correct_answer
+    )
+  }
+  
+  # Calculate final accuracies
+  final_top_1_accuracy <- top_1_accuracy / nrow(analogy_task)
+  final_top_5_accuracy <- top_5_accuracy / nrow(analogy_task)
+  
+  # Save the results to JSON
+  write_json(results, "./bonus/task_result.json", pretty = TRUE)
+  
+  # Return the accuracies
+  list(top_1_accuracy = final_top_1_accuracy, top_5_accuracy = final_top_5_accuracy)
+}
+
+# Execute the function (Replace with actual dataframes)
+accuracies <- perform_analogy_task(V_normalized, dictionary, analogy_task)
+print(accuracies)
+```
+
+
+
