@@ -1,0 +1,204 @@
+---
+title: "Assignment1 Q9"
+author: "Jiahang Wang"
+output: pdf_document
+---
+```{r message=FALSE}
+# Load necessary libraries
+library(readr)
+library(dplyr)
+```
+
+
+```{r message=FALSE}
+# load data
+data.source <- paste0("https://raw.githubusercontent.com/",
+"mcgillstat/regression/main/data/medals_2008.csv")
+medals <- read_csv(data.source, col_names = FALSE)
+colnames(medals) <- c("Country", "Gold", "Silver", "Bronze")
+# e.g. print out the first 11 countries
+print(medals, n = 11)
+```
+# Q1
+```{r}
+# Calculate the number of nations with at least one gold medal
+nations_with_gold <- medals %>%
+  filter(Gold > 0) %>%
+  nrow()
+
+# Print the result
+print(nations_with_gold)
+```
+# Q2
+```{r}
+# Center and scale the medal counts, keeping Country as the first column
+medals_p <- medals %>%
+  mutate(across(c(Gold, Silver, Bronze), scale)) 
+
+medals_p
+```
+- Centering:
+
+Centering is essential when data doesn't naturally have a mean of zero. If the data is not centered, the first principal component may capture the data's overall average instead of its underlying patterns and variances.
+It's also necessary when variables have different means. Failing to center can lead to the PCA being sensitive to variables with larger means, potentially distorting the interpretation of principal components.
+Centering ensures that the origin (0,0) in the multidimensional space corresponds to the center of data distribution, making it easier to interpret the directions of maximum variance.
+
+- Scaling:
+
+Scaling is important when variables have different units or scales (e.g., one variable is measured in meters, another in grams). Without scaling, variables with larger numeric ranges can dominate the PCA analysis, as PCA is based on variance, and larger values contribute more to variance.
+By scaling the data, it will give equal importance to each variable, ensuring that the PCA components are influenced by the relative variations in each variable rather than their absolute values.
+Scaling also helps in making the analysis less sensitive to the choice of units in which variables are measured, making the results more robust and interpretable.
+
+# Q3
+```{r}
+# Perform Principal Component Analysis
+pca_result <- prcomp(medals_p[, c("Gold", "Silver", "Bronze")])
+
+# Extract the loadings (principal components)
+loadings <- pca_result$rotation[, 1:3]
+
+# Extract the eigenvalues
+eigenvalues <- pca_result$sdev[1:3]^2
+
+# Display the principal components
+print("Principal Components (PC1, PC2, PC3):")
+print(loadings)
+
+# Display their corresponding eigenvalues
+print("Corresponding Eigenvalues:")
+print(eigenvalues)
+```
+# Q4
+## a
+```{r}
+# Perform Principal Component Analysis
+pca_result <- prcomp(medals_p[, c("Gold", "Silver", "Bronze")])
+
+# Calculate the amount of variance captured by the first principal component
+variance_captured_pc1 <- pca_result$sdev[1]^2
+
+# Print the amount of variance captured by PC1
+print(paste("Amount of variance captured by PC1:", variance_captured_pc1))
+
+# Calculate the total variance of the dataset
+total_variance <- sum(pca_result$sdev^2)
+
+# Calculate the reconstruction error in terms of variance
+reconstruction_error_variance <- total_variance - variance_captured_pc1
+
+# Print the reconstruction error in terms of variance
+print(paste("Reconstruction error:", reconstruction_error_variance))
+```
+## b
+```{r}
+# Perform Principal Component Analysis
+pca_result <- prcomp(medals_p[, c("Gold", "Silver", "Bronze")])
+
+# Calculate the amount of variance captured by the first two principal components
+variance_captured_pc1_pc2 <- sum(pca_result$sdev[1:2]^2)
+
+# Print the amount of variance captured by PC1 and PC2
+print(paste("Amount of variance captured by PC1 and PC2:", variance_captured_pc1_pc2))
+
+# Calculate the total variance of the dataset
+total_variance <- sum(pca_result$sdev^2)
+
+# Calculate the reconstruction error in terms of variance
+reconstruction_error_variance <- total_variance - variance_captured_pc1_pc2
+
+# Print the reconstruction error in terms of variance
+print(paste("Reconstruction error:", reconstruction_error_variance))
+```
+## c
+```{r}
+# Perform Principal Component Analysis
+pca_result <- prcomp(medals_p[, c("Gold", "Silver", "Bronze")])
+
+# Calculate the amount of variance captured by the first three principal components
+variance_captured_pc1_pc2_pc3 <- sum(pca_result$sdev[1:3]^2)
+
+# Print the amount of variance captured by PC1, PC2, and PC3
+print(paste("Amount of variance captured by PC1, PC2, and PC3:", variance_captured_pc1_pc2_pc3))
+
+# Calculate the total variance of the dataset
+total_variance <- sum(pca_result$sdev^2)
+
+# Calculate the reconstruction error in terms of variance
+# For three components, this error should be very small or zero, as we are using all components
+reconstruction_error_variance <- total_variance - variance_captured_pc1_pc2_pc3
+
+# Print the reconstruction error in terms of variance
+print(paste("Reconstruction error:", reconstruction_error_variance))
+```
+# Q5
+```{r}
+# Perform PCA on the scaled data to obtain the principal component vectors
+pca_result_scaled <- prcomp(medals_p[, c("Gold", "Silver", "Bronze")])
+
+# Extract the first principal component vector (b1)
+b1 <- pca_result_scaled$rotation[, 1]
+
+# Project the data onto b1
+original_centered <- scale(medals_p[, c("Gold", "Silver", "Bronze")])
+coor_b1 <- as.data.frame(original_centered %*% b1)
+
+# Add country names to the coordinates table
+coor_b1$Country <- medals$Country
+
+# Rename the first column to "PC1_Coordinates"
+names(coor_b1)[1] <- "PC1_Coordinates"
+
+coor_b1
+```
+
+## rank of nations based on the PC1 coordinates
+```{r}
+# Rank nations based on the PC1 coordinates
+ranked_nations <- coor_b1 %>%
+  arrange(PC1_Coordinates)
+
+# Print the ranked list of nations
+head(ranked_nations)
+```
+## rank of nations based on  three ranking methods
+```{r}
+# Add overall rank to ranked_nations
+ranked_nations$Rank_PCA1 <- seq_along(ranked_nations$PC1_Coordinates)
+
+# Calculate ranks in the original medals data frame
+medals$Rank_Gold = rank(-medals$Gold, ties.method = "min")
+medals$Rank_Total = rank(-(medals$Gold + medals$Silver + medals$Bronze), ties.method = "min")
+
+# Merge these ranks into the ranked_nations data frame and exclude the PC1_Coordinates column
+ranked_nations_all <- ranked_nations %>%
+  left_join(select(medals, Country, Rank_Gold, Rank_Total), by = "Country") %>%
+  select(-PC1_Coordinates)
+
+# Display the first few rows of the new data frame
+head(ranked_nations_all, n=10)
+```
+## differences of three ranking methods
+```{r}
+# Create a new dataframe with differences
+result_diff <- data.frame(
+  Countries = ranked_nations_all$Country,
+  Diff_PCA1_Gold = abs(ranked_nations_all$Rank_PCA1 - ranked_nations_all$Rank_Gold),
+  Diff_PCA1_Total = abs(ranked_nations_all$Rank_PCA1 - ranked_nations_all$Rank_Total),
+  Diff_Gold_Total = abs(ranked_nations_all$Rank_Gold - ranked_nations_all$Rank_Total)
+)
+
+# Display the first few rows of the new data frame
+head(result_diff)
+
+```
+As shown above the ranking difference between 3 methods are both small. With the smallest difference between PCA1 ranking method and the total ranking method.
+
+
+# Q6
+
+Collect and normalize medal data for each nation. Create an autoencoder neural network architecture with an encoder to reduce the data dimensionality and a decoder to reconstruct the original data. Train the autoencoder using the normalized medal data and minimize the reconstruction error. And using the trained encoder to obtain lower-dimensional representations. Rank nations based on their positions in this reduced space, where nations closer together may have similar medal performances(rank). It is more capable of capturing non-linear relationships in the data, which PCA, being a linear method, cannot. And also automatically learn features, prioritizing data aspects more relevant for reconstruction, which can be more meaningful for analyzing complex medal data.
+
+
+
+
+
